@@ -27,6 +27,8 @@ import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.CharBuffer;
@@ -64,6 +66,7 @@ public final class ByteBufUtil {
     private static final int MAX_BYTES_PER_CHAR_UTF8 =
             (int) CharsetUtil.encoder(CharsetUtil.UTF_8).maxBytesPerChar();
 
+    static final int WRITE_CHUNK_SIZE = 8192;
     static final ByteBufAllocator DEFAULT_ALLOCATOR;
 
     static {
@@ -1390,6 +1393,26 @@ public final class ByteBufUtil {
             }
         }
         return true;
+    }
+
+    /**
+     * Read bytes from the given {@link ByteBuffer} into the given {@link OutputStream} using the {@code position} and
+     * {@code length}. The position of the given {@link ByteBuffer} will be incremented.
+     */
+    static void readBytes(ByteBuffer buffer, int position, int length, OutputStream out) throws IOException {
+        if (buffer.hasArray()) {
+            out.write(buffer.array(), position + buffer.arrayOffset(), length);
+        } else {
+            byte[] tmp = new byte[Math.min(length, WRITE_CHUNK_SIZE)];
+            buffer.clear().position(position);
+
+            do {
+                int len = Math.min(length, tmp.length);
+                buffer.get(tmp, 0, len);
+                out.write(tmp, 0, len);
+                length -= len;
+            } while (length > 0);
+        }
     }
 
     private ByteBufUtil() { }
